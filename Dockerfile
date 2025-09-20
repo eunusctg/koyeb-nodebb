@@ -1,16 +1,16 @@
 FROM node:18
 
-# Install git
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# Install dependencies
+RUN apt-get update && apt-get install -y git python3 build-essential && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Clone NodeBB repo and move files
-RUN git clone -b v3.x https://github.com/NodeBB/NodeBB.git /tmp/nodebb && \
-    cp -r /tmp/nodebb/. /app && \
-    rm -rf /tmp/nodebb && \
-    npm install --production
+# Clone NodeBB directly into /app
+RUN git clone -b v3.x https://github.com/NodeBB/NodeBB.git /app
+
+# Install production dependencies
+RUN npm install --production
 
 # Expose NodeBB default port
 EXPOSE 4567
