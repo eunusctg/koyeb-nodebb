@@ -30,9 +30,9 @@ RUN npm install
 # Install webpack-cli globally to avoid interactive prompt
 RUN npm install -g webpack-cli
 
-# Build NodeBB using webpack with non-interactive flag
+# Build NodeBB using webpack directly (not through npx)
 RUN echo "Building NodeBB assets..." && \
-    npx --yes webpack --mode production
+    webpack --mode production
 
 # Stage 2: Final
 FROM node:18-slim
@@ -105,9 +105,8 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
 
 RUN chmod +x /usr/src/nodebb/start.sh
 
-# Expose both NodeBB port and health check port
+# Expose NodeBB port
 EXPOSE 4567
-EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=120s --retries=3 \
