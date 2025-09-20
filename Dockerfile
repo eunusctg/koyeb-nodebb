@@ -1,3 +1,65 @@
+# Stage 1: Builder
+FROM node:18 AS builder
+
+# Install dependencies
+RUN apt-get update && apt-get install -y git python3 build-essential && rm -rf /var/lib/apt/lists/*
+
+# Clone specific stable NodeBB version (v2.8.0)
+RUN git clone --depth 1 --branch v2.8.0 https://github.com/NodeBB/NodeBB.git /usr/src/nodebb
+
+WORKDIR /usr/src/nodebb
+
+# Check if package.json exists in root, if not copy from install/
+RUN if [ -f package.json ]; then \
+        echo "package.json found in root directory!"; \
+    else \
+        echo "package.json not in root, checking install/ directory..."; \
+        if [ -f ./install/package.json ]; then \
+            echo "Moving package.json from install/ to root..." && \
+            cp ./install/package.json . && \
+            echo "package.json moved to root directory"; \
+        else \
+            echo "ERROR: package.json not found anywhere!"; \
+            exit 1; \
+        fi; \
+    fi
+
+# Install NodeBB dependencies (omit dev)
+RUN npm install --omit=dev
+
+# Stage 2: Final
+FROM node:18
+
+WORKDIR /usr/src/nodebb
+
+# Copy NodeBB from builder
+COPY --from=builder /usr/src/nodebb .
+
+# Environment variables (set these in Koyeb or secrets)
+ENV DATABASE_HOST=""
+ENV DATABASE_USER=""
+ENV DATABASE_PASSWORD=""
+ENV DATABASE_NAME=""
+ENV URL=""
+ENV SECRET=""
+ENV ADMIN_USERNAME=""
+ENV ADMIN_EMAIL=""
+ENV ADMIN_PASSWORD=""
+ENV DATABASE_PORT="5432"
+
+# Create a simple health check script that waits for NodeBB
+RUN echo '#!/bin/bash' > /usr/src/nodebb/healthcheck.sh && \
+    echo '# Simple health check that returns success once NodeBB is ready' >> /usr/src/nodebb/healthcheck.sh && \
+    echo 'if [ -f /usr/src/nodebb/.installed ]; then' >> /usr/src/nodebb/healthcheck.sh && \
+    echo '    # After installation, check if port 4567 is listening' >> /usr/src/nodebb/healthcheck.sh && \
+    echo '    nc -z localhost 4567' >> /usr/src/nodebb/healthcheck.sh && \
+    echo '    exit $?' >> /usr/src/nodebb/healthcheck.sh && \
+    echo 'else' >> /usr/src/nodebb/healthcheck.sh && \
+    echo '    # Before installation, just return success to prevent restarts' >> /usr/src/nodebb/healthcheck.sh && \
+    echo '    exit 0' >> /usr/src/nodebb/healthcheck.sh && \
+    echo 'fi' >> /usr/src/nodebb/healthcheck.sh && \
+    chmod +x /usr/src/nodebb/healthcheck.sh
+
 # Create startup script
 RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo 'set -e' >> /usr/src/nodebb/start.sh && \
@@ -58,3 +120,11 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
     echo 'echo "Starting NodeBB..."' >> /usr/src/nodebb/start.sh && \
     echo 'exec ./nodebb start' >> /usr/src/nodebb/start.sh
+
+RUN chmod +x /usr/src/nodebb/start.sh
+
+# Expose NodeBB default port
+EXPOSE 4567
+
+# Run the setup script on container start
+CMD ["/usr/src/nodebb/start.sh"]
