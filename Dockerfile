@@ -4,15 +4,20 @@ FROM node:18 AS builder
 # Install dependencies
 RUN apt-get update && apt-get install -y git python3 build-essential && rm -rf /var/lib/apt/lists/*
 
-# Clone specific stable NodeBB version (v2.8.0 - known to be stable)
+# Clone specific stable NodeBB version (v2.8.0)
 RUN git clone --depth 1 --branch v2.8.0 https://github.com/NodeBB/NodeBB.git /usr/src/nodebb
 
 WORKDIR /usr/src/nodebb
 
-# Check what was cloned
-RUN ls -la && \
-    echo "Checking for package.json..." && \
-    if [ -f package.json ]; then echo "package.json found!"; cat package.json | head -5; else echo "package.json NOT found! Listing files:"; find . -name "package.json" -type f; fi
+# Check the structure and move package.json to root if needed
+RUN if [ -f ./install/package.json ]; then \
+        echo "Moving package.json from install/ to root..." && \
+        cp ./install/package.json . && \
+        echo "package.json moved to root directory"; \
+    else \
+        echo "ERROR: package.json not found in install/ directory"; \
+        exit 1; \
+    fi
 
 # Install NodeBB dependencies (omit dev)
 RUN npm install --omit=dev
