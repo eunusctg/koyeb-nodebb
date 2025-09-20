@@ -4,15 +4,15 @@ FROM node:18 AS builder
 # Install dependencies
 RUN apt-get update && apt-get install -y git python3 build-essential && rm -rf /var/lib/apt/lists/*
 
-# Clone specific stable NodeBB version (v3.0.0)
-RUN git clone --depth 1 --branch v3.0.0 https://github.com/NodeBB/NodeBB.git /usr/src/nodebb
+# Clone specific stable NodeBB version (v2.8.0 - known to be stable)
+RUN git clone --depth 1 --branch v2.8.0 https://github.com/NodeBB/NodeBB.git /usr/src/nodebb
 
 WORKDIR /usr/src/nodebb
 
 # Check what was cloned
 RUN ls -la && \
     echo "Checking for package.json..." && \
-    if [ -f package.json ]; then echo "package.json found!"; cat package.json | head -5; else echo "package.json NOT found!"; fi
+    if [ -f package.json ]; then echo "package.json found!"; cat package.json | head -5; else echo "package.json NOT found! Listing files:"; find . -name "package.json" -type f; fi
 
 # Install NodeBB dependencies (omit dev)
 RUN npm install --omit=dev
