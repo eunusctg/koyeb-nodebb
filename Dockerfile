@@ -1,14 +1,19 @@
 FROM node:18
 
+# Install git
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
 WORKDIR /app
 
-# Clone and copy files safely (excluding . and ..)
+# Clone NodeBB repo and move files
 RUN git clone -b v3.x https://github.com/NodeBB/NodeBB.git /tmp/nodebb && \
-    shopt -s dotglob && \
-    cp -r /tmp/nodebb/* /app && \
+    cp -r /tmp/nodebb/. /app && \
     rm -rf /tmp/nodebb && \
     npm install --production
 
+# Expose NodeBB default port
 EXPOSE 4567
 
-CMD ["node", "loader.js", "--no-daemon"]
+# Start NodeBB
+CMD ["node", "app.js"]
