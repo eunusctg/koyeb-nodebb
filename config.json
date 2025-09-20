@@ -1,0 +1,15 @@
+{
+  "url": "https://piforum.koyeb.app",
+  "secret": "piforum_super_secret_key_123456789",
+  "database": "postgres",
+  "port": "4567",
+  "bind_address": "0.0.0.0",
+  "postgres": {
+    "host": "ep-muddy-hall-a4xfddxq.us-east-1.pg.koyeb.app",
+    "port": "5432",
+    "username": "koyeb-adm",
+    "password": "YOUR_DB_PASSWORD_HERE",
+    "database": "koyebdb",
+    "ssl": true
+  }
+}
