@@ -1,20 +1,19 @@
-# Node.js base image
 FROM node:18
 
-# Install dependencies
+# Install dependencies for NodeBB
 RUN apt-get update && apt-get install -y git python3 build-essential && rm -rf /var/lib/apt/lists/*
 
-# Clone NodeBB
+# Clone NodeBB (use master branch, which exists)
 RUN git clone --recurse-submodules -b master https://github.com/NodeBB/NodeBB.git /usr/src/nodebb
 
 # Set working directory
 WORKDIR /usr/src/nodebb
 
-# Install NodeBB dependencies
+# Install production dependencies
 RUN npm install --omit=dev
 
 # Generate config.json inside the container
-RUN echo '{
+RUN printf '{
   "url": "https://piforum.koyeb.app",
   "secret": "piforum_super_secret_key_123456789",
   "database": "postgres",
@@ -30,7 +29,7 @@ RUN echo '{
   }
 }' > /usr/src/nodebb/config.json
 
-# Expose NodeBB port
+# Expose NodeBB default port
 EXPOSE 4567
 
 # Start NodeBB
