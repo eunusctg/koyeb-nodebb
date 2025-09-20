@@ -28,61 +28,63 @@ RUN if [ -f package.json ]; then \
 RUN npm install --omit=dev
 
 # Stage 2: Final
-FROM node:18
+FROM node:18-slim
 
 WORKDIR /usr/src/nodebb
 
 # Copy NodeBB from builder
 COPY --from=builder /usr/src/nodebb .
 
-# Environment variables (set these in Koyeb or secrets)
-ENV DATABASE_HOST=""
-ENV DATABASE_USER=""
-ENV DATABASE_PASSWORD=""
-ENV DATABASE_NAME=""
-ENV URL=""
-ENV SECRET=""
-ENV ADMIN_USERNAME=""
-ENV ADMIN_EMAIL=""
-ENV ADMIN_PASSWORD=""
-ENV DATABASE_PORT="5432"
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# Create improved startup script
+# Environment variables (set these in Koyeb or secrets)
+ENV NODE_ENV="production"
+ENV URL="http://localhost:4567"
+ENV SECRET="change-this-to-a-random-secret"
+
+# Create a script to handle configuration
+RUN echo '#!/bin/bash' > /usr/src/nodebb/configure.sh && \
+    echo 'set -e' >> /usr/src/nodebb/configure.sh && \
+    echo '' >> /usr/src/nodebb/configure.sh && \
+    echo '# Wait for environment variables to be injected (Koyeb does this at runtime)' >> /usr/src/nodebb/configure.sh && \
+    echo 'echo "Waiting for environment variables to be available..."' >> /usr/src/nodebb/configure.sh && \
+    echo 'sleep 5' >> /usr/src/nodebb/configure.sh && \
+    echo '' >> /usr/src/nodebb/configure.sh && \
+    echo '# Check if config already exists' >> /usr/src/nodebb/configure.sh && \
+    echo 'if [ ! -f /usr/src/nodebb/config.json ]; then' >> /usr/src/nodebb/configure.sh && \
+    echo '    echo "Generating config.json from environment variables..."' >> /usr/src/nodebb/configure.sh && \
+    echo '    node -e "' >> /usr/src/nodebb/configure.sh && \
+    echo '        const fs = require(\"fs\");' >> /usr/src/nodebb/configure.sh && \
+    echo '        const config = {' >> /usr/src/nodebb/configure.sh && \
+    echo '            url: process.env.URL || \"http://localhost:4567\",' >> /usr/src/nodebb/configure.sh && \
+    echo '            secret: process.env.SECRET || \"change-this-to-a-random-secret\",' >> /usr/src/nodebb/configure.sh && \
+    echo '            database: \"postgres\",' >> /usr/src/nodebb/configure.sh && \
+    echo '            postgres: {' >> /usr/src/nodebb/configure.sh && \
+    echo '                host: process.env.DATABASE_HOST,' >> /usr/src/nodebb/configure.sh && \
+    echo '                port: process.env.DATABASE_PORT || 5432,' >> /usr/src/nodebb/configure.sh && \
+    echo '                username: process.env.DATABASE_USER,' >> /usr/src/nodebb/configure.sh && \
+    echo '                password: process.env.DATABASE_PASSWORD,' >> /usr/src/nodebb/configure.sh && \
+    echo '                database: process.env.DATABASE_NAME,' >> /usr/src/nodebb/configure.sh && \
+    echo '                ssl: true,' >> /usr/src/nodebb/configure.sh && \
+    echo '                sslmode: \"require\"' >> /usr/src/nodebb/configure.sh && \
+    echo '            }' >> /usr/src/nodebb/configure.sh && \
+    echo '        };' >> /usr/src/nodebb/configure.sh && \
+    echo '        fs.writeFileSync(\"/usr/src/nodebb/config.json\", JSON.stringify(config, null, 2));' >> /usr/src/nodebb/configure.sh && \
+    echo '    "' >> /usr/src/nodebb/configure.sh && \
+    echo '    echo "Config file generated successfully"' >> /usr/src/nodebb/configure.sh && \
+    echo 'else' >> /usr/src/nodebb/configure.sh && \
+    echo '    echo "Using existing config.json"' >> /usr/src/nodebb/configure.sh && \
+    echo 'fi' >> /usr/src/nodebb/configure.sh
+
+RUN chmod +x /usr/src/nodebb/configure.sh
+
+# Create startup script
 RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo 'set -e' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
-    echo '# Generate config.json from environment variables' >> /usr/src/nodebb/start.sh && \
-    echo 'cat > /usr/src/nodebb/config.json << EOF' >> /usr/src/nodebb/start.sh && \
-    echo '{' >> /usr/src/nodebb/start.sh && \
-    echo '  "url": "$URL",' >> /usr/src/nodebb/start.sh && \
-    echo '  "secret": "$SECRET",' >> /usr/src/nodebb/start.sh && \
-    echo '  "database": "postgres",' >> /usr/src/nodebb/start.sh && \
-    echo '  "postgres": {' >> /usr/src/nodebb/start.sh && \
-    echo '    "host": "$DATABASE_HOST",' >> /usr/src/nodebb/start.sh && \
-    echo '    "port": "$DATABASE_PORT",' >> /usr/src/nodebb/start.sh && \
-    echo '    "username": "$DATABASE_USER",' >> /usr/src/nodebb/start.sh && \
-    echo '    "password": "$DATABASE_PASSWORD",' >> /usr/src/nodebb/start.sh && \
-    echo '    "database": "$DATABASE_NAME",' >> /usr/src/nodebb/start.sh && \
-    echo '    "ssl": true,' >> /usr/src/nodebb/start.sh && \
-    echo '    "sslmode": "require"' >> /usr/src/nodebb/start.sh && \
-    echo '  }' >> /usr/src/nodebb/start.sh && \
-    echo '}' >> /usr/src/nodebb/start.sh && \
-    echo 'EOF' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
-    echo 'echo "=== NodeBB Starting ==="' >> /usr/src/nodebb/start.sh && \
-    echo 'echo "Generated config.json:"' >> /usr/src/nodebb/start.sh && \
-    echo 'cat /usr/src/nodebb/config.json' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
-    echo '# Create a simple health check endpoint that always returns 200 during setup' >> /usr/src/nodebb/start.sh && \
-    echo 'start_health_server() {' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "Starting health check server on port 8080..."' >> /usr/src/nodebb/start.sh && \
-    echo '    while true; do' >> /usr/src/nodebb/start.sh && \
-    echo '        echo -e "HTTP/1.1 200 OK\n\nNodeBB Setup in Progress" | nc -l -p 8080 -q 1' >> /usr/src/nodebb/start.sh && \
-    echo '    done' >> /usr/src/nodebb/start.sh && \
-    echo '}' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
-    echo '# Start health server in background' >> /usr/src/nodebb/start.sh && \
-    echo 'start_health_server &' >> /usr/src/nodebb/start.sh && \
+    echo '# Generate configuration' >> /usr/src/nodebb/start.sh && \
+    echo '/usr/src/nodebb/configure.sh' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Install dependencies if not present' >> /usr/src/nodebb/start.sh && \
     echo 'if [ ! -d /usr/src/nodebb/node_modules ]; then' >> /usr/src/nodebb/start.sh && \
@@ -96,41 +98,18 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo '    ./nodebb build' >> /usr/src/nodebb/start.sh && \
     echo 'fi' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
-    echo 'echo "=== FIRST RUN DETECTED ==="' >> /usr/src/nodebb/start.sh && \
-    echo 'echo "NodeBB setup will take several minutes. Please be patient..."' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
-    echo '# Start NodeBB in background to allow setup' >> /usr/src/nodebb/start.sh && \
-    echo 'echo "Starting NodeBB in background for setup..."' >> /usr/src/nodebb/start.sh && \
-    echo './nodebb start &' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
-    echo '# Wait for NodeBB to start and be ready for setup' >> /usr/src/nodebb/start.sh && \
-    echo 'echo "Waiting for NodeBB to be ready..."' >> /usr/src/nodebb/start.sh && \
-    echo 'sleep 30' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
-    echo '# Check if NodeBB is running and ready for setup' >> /usr/src/nodebb/start.sh && \
-    echo 'if curl -f http://localhost:4567 > /dev/null 2>&1; then' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "NodeBB is running! Please complete setup at:"' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "https://piforum.koyeb.app/setup"' >> /usr/src/nodebb/start.sh && \
-    echo '    echo ""' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "The application will remain running for 1 hour to allow setup."' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "After setup, restart the application for normal operation."' >> /usr/src/nodebb/start.sh && \
-    echo '    ' >> /usr/src/nodebb/start.sh && \
-    echo '    # Keep container alive for 1 hour to allow manual setup' >> /usr/src/nodebb/start.sh && \
-    echo '    sleep 3600' >> /usr/src/nodebb/start.sh && \
-    echo 'else' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "NodeBB failed to start. Please check logs for errors."' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "You can try accessing the setup page directly:"' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "https://piforum.koyeb.app/setup"' >> /usr/src/nodebb/start.sh && \
-    echo '    ' >> /usr/src/nodebb/start.sh && \
-    echo '    # Keep container alive for troubleshooting' >> /usr/src/nodebb/start.sh && \
-    echo '    sleep 3600' >> /usr/src/nodebb/start.sh && \
-    echo 'fi' >> /usr/src/nodebb/start.sh
+    echo '# Start NodeBB' >> /usr/src/nodebb/start.sh && \
+    echo 'echo "Starting NodeBB..."' >> /usr/src/nodebb/start.sh && \
+    echo 'exec ./nodebb start' >> /usr/src/nodebb/start.sh
 
 RUN chmod +x /usr/src/nodebb/start.sh
 
-# Expose both NodeBB port and health check port
+# Expose NodeBB port
 EXPOSE 4567
-EXPOSE 8080
 
-# Run the setup script on container start
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:4567 || exit 1
+
+# Run the startup script
 CMD ["/usr/src/nodebb/start.sh"]
