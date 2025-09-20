@@ -27,9 +27,12 @@ RUN if [ -f package.json ]; then \
 # Install all dependencies (including dev dependencies for build)
 RUN npm install
 
-# Build NodeBB using the correct method for this version
+# Install webpack-cli globally to avoid interactive prompt
+RUN npm install -g webpack-cli
+
+# Build NodeBB using webpack with non-interactive flag
 RUN echo "Building NodeBB assets..." && \
-    npx webpack --mode production
+    npx --yes webpack --mode production
 
 # Stage 2: Final
 FROM node:18-slim
