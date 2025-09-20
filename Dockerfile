@@ -47,7 +47,20 @@ ENV ADMIN_EMAIL=""
 ENV ADMIN_PASSWORD=""
 ENV DATABASE_PORT="5432"
 
-# Create startup script with SSL configuration
+# Create a simple health check script that waits for NodeBB
+RUN echo '#!/bin/bash' > /usr/src/nodebb/healthcheck.sh && \
+    echo '# Simple health check that returns success once NodeBB is ready' >> /usr/src/nodebb/healthcheck.sh && \
+    echo 'if [ -f /usr/src/nodebb/.installed ]; then' >> /usr/src/nodebb/healthcheck.sh && \
+    echo '    # After installation, check if port 4567 is listening' >> /usr/src/nodebb/healthcheck.sh && \
+    echo '    nc -z localhost 4567' >> /usr/src/nodebb/healthcheck.sh && \
+    echo '    exit $?' >> /usr/src/nodebb/healthcheck.sh && \
+    echo 'else' >> /usr/src/nodebb/healthcheck.sh && \
+    echo '    # Before installation, just return success to prevent restarts' >> /usr/src/nodebb/healthcheck.sh && \
+    echo '    exit 0' >> /usr/src/nodebb/healthcheck.sh && \
+    echo 'fi' >> /usr/src/nodebb/healthcheck.sh && \
+    chmod +x /usr/src/nodebb/healthcheck.sh
+
+# Create startup script
 RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo 'set -e' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
@@ -69,6 +82,7 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo '}' >> /usr/src/nodebb/start.sh && \
     echo 'EOF' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
+    echo 'echo "=== NodeBB Starting ==="' >> /usr/src/nodebb/start.sh && \
     echo 'echo "Generated config.json:"' >> /usr/src/nodebb/start.sh && \
     echo 'cat /usr/src/nodebb/config.json' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
@@ -80,23 +94,28 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Build NodeBB if not built' >> /usr/src/nodebb/start.sh && \
     echo 'if [ ! -f /usr/src/nodebb/build/loader.js ]; then' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "Building NodeBB..."' >> /usr/src/nodebb/start.sh && \
+    echo '    echo "Building NodeBB... (This may take several minutes)"' >> /usr/src/nodebb/start.sh && \
     echo '    ./nodebb build' >> /usr/src/nodebb/start.sh && \
     echo 'fi' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Check if this is the first run' >> /usr/src/nodebb/start.sh && \
     echo 'if [ ! -f /usr/src/nodebb/.installed ]; then' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "First run detected. Setting up NodeBB..."' >> /usr/src/nodebb/start.sh && \
+    echo '    echo "=== FIRST RUN DETECTED ==="' >> /usr/src/nodebb/start.sh && \
+    echo '    echo "NodeBB setup will take several minutes. Please be patient..."' >> /usr/src/nodebb/start.sh && \
     echo '    ' >> /usr/src/nodebb/start.sh && \
     echo '    # Setup with environment variables or manually' >> /usr/src/nodebb/start.sh && \
     echo '    if [ ! -z "\$ADMIN_USERNAME" ] && [ ! -z "\$ADMIN_EMAIL" ] && [ ! -z "\$ADMIN_PASSWORD" ]; then' >> /usr/src/nodebb/start.sh && \
     echo '        echo "Setting up with provided admin credentials..."' >> /usr/src/nodebb/start.sh && \
     echo '        ./nodebb setup "\$ADMIN_USERNAME" "\$ADMIN_EMAIL" "\$ADMIN_PASSWORD"' >> /usr/src/nodebb/start.sh && \
     echo '    else' >> /usr/src/nodebb/start.sh && \
-    echo '        echo "Please run setup manually when NodeBB starts"' >> /usr/src/nodebb/start.sh && \
+    echo '        echo "Please run setup manually by accessing /setup when NodeBB starts"' >> /usr/src/nodebb/start.sh && \
+    echo '        echo "Starting NodeBB in background to allow manual setup..."' >> /usr/src/nodebb/start.sh && \
+    echo '        ./nodebb start &' >> /usr/src/nodebb/start.sh && \
+    echo '        sleep 300' >> /usr/src/nodebb/start.sh && \
     echo '    fi' >> /usr/src/nodebb/start.sh && \
     echo '    ' >> /usr/src/nodebb/start.sh && \
     echo '    touch /usr/src/nodebb/.installed' >> /usr/src/nodebb/start.sh && \
+    echo '    echo "=== SETUP COMPLETE ==="' >> /usr/src/nodebb/start.sh && \
     echo 'fi' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
     echo 'echo "Starting NodeBB..."' >> /usr/src/nodebb/start.sh && \
