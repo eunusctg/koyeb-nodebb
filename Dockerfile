@@ -4,22 +4,15 @@ FROM node:18 AS builder
 # Install dependencies
 RUN apt-get update && apt-get install -y git python3 build-essential && rm -rf /var/lib/apt/lists/*
 
-# Clone NodeBB to a temporary directory first to check structure
-RUN git clone --recurse-submodules -b master https://github.com/NodeBB/NodeBB.git /tmp/nodebb
-
-# Check what was cloned
-RUN ls -la /tmp/nodebb
-
-# Copy only if package.json exists
-RUN if [ -f /tmp/nodebb/package.json ]; then \
-        mkdir -p /usr/src/nodebb && \
-        cp -r /tmp/nodebb/. /usr/src/nodebb/; \
-    else \
-        echo "ERROR: package.json not found in cloned repository"; \
-        exit 1; \
-    fi
+# Clone specific stable NodeBB version (v3.0.0)
+RUN git clone --depth 1 --branch v3.0.0 https://github.com/NodeBB/NodeBB.git /usr/src/nodebb
 
 WORKDIR /usr/src/nodebb
+
+# Check what was cloned
+RUN ls -la && \
+    echo "Checking for package.json..." && \
+    if [ -f package.json ]; then echo "package.json found!"; cat package.json | head -5; else echo "package.json NOT found!"; fi
 
 # Install NodeBB dependencies (omit dev)
 RUN npm install --omit=dev
@@ -63,13 +56,6 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo '  }' >> /usr/src/nodebb/start.sh && \
     echo '}' >> /usr/src/nodebb/start.sh && \
     echo 'EOF' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
-    echo 'echo "Checking if package.json exists..."' >> /usr/src/nodebb/start.sh && \
-    echo 'if [ ! -f /usr/src/nodebb/package.json ]; then' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "ERROR: package.json not found! Listing directory contents:"' >> /usr/src/nodebb/start.sh && \
-    echo '    ls -la /usr/src/nodebb/' >> /usr/src/nodebb/start.sh && \
-    echo '    exit 1' >> /usr/src/nodebb/start.sh && \
-    echo 'fi' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
     echo 'echo "Generated config.json:"' >> /usr/src/nodebb/start.sh && \
     echo 'cat /usr/src/nodebb/config.json' >> /usr/src/nodebb/start.sh && \
