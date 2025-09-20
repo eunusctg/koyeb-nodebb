@@ -1,24 +1,28 @@
-# Stage 1: Builder
+# Stage 1: Build NodeBB
 FROM node:18 AS builder
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y git python3 build-essential && rm -rf /var/lib/apt/lists/*
 
-# Clone NodeBB
+# Clone NodeBB source
 RUN git clone --recurse-submodules -b master https://github.com/NodeBB/NodeBB.git /usr/src/nodebb
 
-# Set working directory
 WORKDIR /usr/src/nodebb
 
-# Install NodeBB dependencies
+# Install dependencies (production only)
 RUN npm install --omit=dev
 
-# Copy startup script
-COPY start.sh /usr/src/nodebb/start.sh
-RUN chmod +x start.sh
+# Stage 2: Runtime
+FROM node:18
 
-# Expose default NodeBB port
+WORKDIR /usr/src/nodebb
+
+COPY --from=builder /usr/src/nodebb .
+
+# Copy config.json template
+COPY config.json .
+
+# Expose port
 EXPOSE 4567
 
-# Start NodeBB with pre-created admin
-CMD ["./start.sh"]
+# Start NodeBB
+CMD ["node", "app.js"]
