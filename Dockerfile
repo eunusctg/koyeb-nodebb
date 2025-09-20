@@ -1,35 +1,24 @@
 FROM node:18
 
-# Install dependencies for NodeBB
+# Install dependencies required for building NodeBB
 RUN apt-get update && apt-get install -y git python3 build-essential && rm -rf /var/lib/apt/lists/*
 
-# Clone NodeBB (use master branch, which exists)
-RUN git clone --recurse-submodules -b master https://github.com/NodeBB/NodeBB.git /usr/src/nodebb
+# Clone NodeBB from main branch
+RUN git clone --recurse-submodules -b main https://github.com/NodeBB/NodeBB.git /usr/src/nodebb
 
 # Set working directory
 WORKDIR /usr/src/nodebb
 
-# Install production dependencies
+# Copy package.json & package-lock.json first for caching npm install
+COPY --from=0 /usr/src/nodebb/package*.json ./
+
+# Install production dependencies (cached if package.json unchanged)
 RUN npm install --omit=dev
 
-# Generate config.json inside the container
-RUN printf '{\n\
-  "url": "https://piforum.koyeb.app",\n\
-  "secret": "piforum_super_secret_key_123456789",\n\
-  "database": "postgres",\n\
-  "port": "4567",\n\
-  "bind_address": "0.0.0.0",\n\
-  "postgres": {\n\
-    "host": "ep-muddy-hall-a4xfddxq.us-east-1.pg.koyeb.app",\n\
-    "port": "5432",\n\
-    "username": "koyeb-adm",\n\
-    "password": "npg_3taSXcbxYvU2",\n\
-    "database": "koyebdb",\n\
-    "ssl": true\n\
-  }\n\
-}' > /usr/src/nodebb/config.json
+# Copy the rest of the NodeBB source
+COPY --from=0 /usr/src/nodebb ./
 
-# Expose NodeBB default port
+# Expose NodeBB port
 EXPOSE 4567
 
 # Start NodeBB
