@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e
+
 # Generate config.json using environment variables
 cat <<EOF > config.json
 {
@@ -15,11 +17,13 @@ cat <<EOF > config.json
 }
 EOF
 
-# Install dependencies
-npm install --omit=dev
+# If node_modules are missing, install dependencies
+if [ ! -d "node_modules" ]; then
+    npm install --omit=dev
+fi
 
-# If admin does not exist, create it
-node app --setup --username="${ADMIN_USERNAME}" --password="${ADMIN_PASSWORD}" --email="${ADMIN_EMAIL}" --isAdmin
+# Pre-create admin if it doesn't exist
+node app --setup --username="${ADMIN_USERNAME}" --password="${ADMIN_PASSWORD}" --email="${ADMIN_EMAIL}" --isAdmin || true
 
 # Start NodeBB
 node app
