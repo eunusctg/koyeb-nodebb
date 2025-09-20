@@ -27,8 +27,9 @@ RUN if [ -f package.json ]; then \
 # Install all dependencies (including dev dependencies for build)
 RUN npm install
 
-# Build NodeBB with all necessary components
-RUN ./nodebb build --series
+# Build NodeBB using the correct method for this version
+RUN echo "Building NodeBB assets..." && \
+    npx webpack --mode production
 
 # Stage 2: Final
 FROM node:18-slim
