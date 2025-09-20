@@ -1,7 +1,7 @@
 # Stage 1: Builder
 FROM node:18 AS builder
 
-# Install dependencies
+# Install dependencies including development tools
 RUN apt-get update && apt-get install -y git python3 build-essential && rm -rf /var/lib/apt/lists/*
 
 # Clone specific stable NodeBB version (v2.8.0)
@@ -24,8 +24,11 @@ RUN if [ -f package.json ]; then \
         fi; \
     fi
 
-# Install NodeBB dependencies (omit dev)
-RUN npm install --omit=dev
+# Install all dependencies (including dev dependencies for build)
+RUN npm install
+
+# Build NodeBB with all necessary components
+RUN ./nodebb build --series
 
 # Stage 2: Final
 FROM node:18-slim
@@ -47,7 +50,7 @@ ENV SECRET="change-this-to-a-random-secret"
 RUN echo '#!/bin/bash' > /usr/src/nodebb/configure.sh && \
     echo 'set -e' >> /usr/src/nodebb/configure.sh && \
     echo '' >> /usr/src/nodebb/configure.sh && \
-    echo '# Wait for environment variables to be injected (Koyeb does this at runtime)' >> /usr/src/nodebb/configure.sh && \
+    echo '# Wait for environment variables to be injected' >> /usr/src/nodebb/configure.sh && \
     echo 'echo "Waiting for environment variables to be available..."' >> /usr/src/nodebb/configure.sh && \
     echo 'sleep 5' >> /usr/src/nodebb/configure.sh && \
     echo '' >> /usr/src/nodebb/configure.sh && \
@@ -86,16 +89,10 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo '# Generate configuration' >> /usr/src/nodebb/start.sh && \
     echo '/usr/src/nodebb/configure.sh' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
-    echo '# Install dependencies if not present' >> /usr/src/nodebb/start.sh && \
+    echo '# Install production dependencies only' >> /usr/src/nodebb/start.sh && \
     echo 'if [ ! -d /usr/src/nodebb/node_modules ]; then' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "Installing NodeBB dependencies..."' >> /usr/src/nodebb/start.sh && \
+    echo '    echo "Installing NodeBB production dependencies..."' >> /usr/src/nodebb/start.sh && \
     echo '    npm install --omit=dev' >> /usr/src/nodebb/start.sh && \
-    echo 'fi' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
-    echo '# Build NodeBB if not built' >> /usr/src/nodebb/start.sh && \
-    echo 'if [ ! -f /usr/src/nodebb/build/loader.js ]; then' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "Building NodeBB... (This may take several minutes)"' >> /usr/src/nodebb/start.sh && \
-    echo '    ./nodebb build' >> /usr/src/nodebb/start.sh && \
     echo 'fi' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Start NodeBB' >> /usr/src/nodebb/start.sh && \
@@ -104,8 +101,9 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
 
 RUN chmod +x /usr/src/nodebb/start.sh
 
-# Expose NodeBB port
+# Expose both NodeBB port and health check port
 EXPOSE 4567
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=120s --retries=3 \
