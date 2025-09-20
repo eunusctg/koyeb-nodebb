@@ -9,14 +9,24 @@ RUN git clone --recurse-submodules -b main https://github.com/NodeBB/NodeBB.git 
 # Set working directory
 WORKDIR /usr/src/nodebb
 
-# Copy package.json & package-lock.json first for caching npm install
-COPY --from=0 /usr/src/nodebb/package*.json ./
-
-# Install production dependencies (cached if package.json unchanged)
+# Install production dependencies
 RUN npm install --omit=dev
 
-# Copy the rest of the NodeBB source
-COPY --from=0 /usr/src/nodebb ./
+# Generate config.json for NodeBB
+RUN printf '{
+  "url": "https://piforum.koyeb.app",
+  "secret": "piforum_super_secret_key_123456789",
+  "database": "postgres",
+  "port": "4567",
+  "postgres": {
+    "host": "ep-muddy-hall-a4xfddxq.us-east-1.pg.koyeb.app",
+    "port": "5432",
+    "username": "koyeb-adm",
+    "password": "npg_3taSXcbxYvU2",
+    "database": "koyebdb",
+    "ssl": true
+  }
+}' > /usr/src/nodebb/config.json
 
 # Expose NodeBB port
 EXPOSE 4567
