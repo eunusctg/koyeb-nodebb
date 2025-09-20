@@ -27,12 +27,11 @@ RUN if [ -f package.json ]; then \
 # Install all dependencies (including dev dependencies for build)
 RUN npm install
 
-# Install webpack-cli globally to avoid interactive prompt
-RUN npm install -g webpack-cli
-
-# Build NodeBB using webpack directly (not through npx)
+# Try to build using NodeBB's own build script with a timeout
 RUN echo "Building NodeBB assets..." && \
-    webpack --mode production
+    timeout 300s ./nodebb build --series || \
+    (echo "Build timed out or failed, trying alternative approach..." && \
+     echo "Skipping build step - will build at runtime")
 
 # Stage 2: Final
 FROM node:18-slim
@@ -42,8 +41,8 @@ WORKDIR /usr/src/nodebb
 # Copy NodeBB from builder
 COPY --from=builder /usr/src/nodebb .
 
-# Install curl for health checks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Install curl for health checks and build essentials for runtime build
+RUN apt-get update && apt-get install -y curl python3 build-essential && rm -rf /var/lib/apt/lists/*
 
 # Environment variables (set these in Koyeb or secrets)
 ENV NODE_ENV="production"
@@ -86,7 +85,7 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/configure.sh && \
 
 RUN chmod +x /usr/src/nodebb/configure.sh
 
-# Create startup script
+# Create startup script that builds at runtime if needed
 RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo 'set -e' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
@@ -99,6 +98,12 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo '    npm install --omit=dev' >> /usr/src/nodebb/start.sh && \
     echo 'fi' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
+    echo '# Build NodeBB if not built (this may take several minutes)' >> /usr/src/nodebb/start.sh && \
+    echo 'if [ ! -f /usr/src/nodebb/build/loader.js ]; then' >> /usr/src/nodebb/start.sh && \
+    echo '    echo "Building NodeBB at runtime... (This may take several minutes)"' >> /usr/src/nodebb/start.sh && \
+    echo '    ./nodebb build --series' >> /usr/src/nodebb/start.sh && \
+    echo 'fi' >> /usr/src/nodebb/start.sh && \
+    echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Start NodeBB' >> /usr/src/nodebb/start.sh && \
     echo 'echo "Starting NodeBB..."' >> /usr/src/nodebb/start.sh && \
     echo 'exec ./nodebb start' >> /usr/src/nodebb/start.sh
@@ -109,7 +114,7 @@ RUN chmod +x /usr/src/nodebb/start.sh
 EXPOSE 4567
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=120s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=30s --start-period=300s --retries=3 \
     CMD curl -f http://localhost:4567 || exit 1
 
 # Run the startup script
