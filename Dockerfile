@@ -4,8 +4,8 @@ FROM node:18 AS builder
 # Install dependencies including development tools
 RUN apt-get update && apt-get install -y git python3 build-essential && rm -rf /var/lib/apt/lists/*
 
-# Clone specific stable NodeBB version (v2.8.0)
-RUN git clone --depth 1 --branch v2.8.0 https://github.com/NodeBB/NodeBB.git /usr/src/nodebb
+# Clone NodeBB version 2.7.0 which doesn't have the build issue
+RUN git clone --depth 1 --branch v2.7.0 https://github.com/NodeBB/NodeBB.git /usr/src/nodebb
 
 WORKDIR /usr/src/nodebb
 
@@ -34,9 +34,9 @@ RUN echo "Installing NodeBB composer plugin..." && \
     npm install nodebb-widget-essentials && \
     npm install nodebb-rewards-essentials
 
-# Build NodeBB
+# Build NodeBB using npm script instead of ./nodebb command
 RUN echo "Building NodeBB assets..." && \
-    ./nodebb build --series
+    npm run build
 
 # Stage 2: Final
 FROM node:18-slim
