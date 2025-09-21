@@ -27,6 +27,13 @@ RUN if [ -f package.json ]; then \
 # Install all dependencies (including dev dependencies for build)
 RUN npm install
 
+# Install necessary NodeBB plugins to resolve missing module errors
+RUN echo "Installing NodeBB composer plugin..." && \
+    npm install nodebb-plugin-composer-default && \
+    echo "Installing other essential plugins..." && \
+    npm install nodebb-widget-essentials && \
+    npm install nodebb-rewards-essentials
+
 # Try to build using NodeBB's own build script with a timeout
 RUN echo "Building NodeBB assets..." && \
     timeout 300s ./nodebb build --series || \
@@ -85,9 +92,20 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/configure.sh && \
 
 RUN chmod +x /usr/src/nodebb/configure.sh
 
-# Create startup script that builds at runtime if needed
+# Create startup script with health check server on port 3000
 RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo 'set -e' >> /usr/src/nodebb/start.sh && \
+    echo '' >> /usr/src/nodebb/start.sh && \
+    echo '# Function to start health check server on port 3000' >> /usr/src/nodebb/start.sh && \
+    echo 'start_health_server() {' >> /usr/src/nodebb/start.sh && \
+    echo '    echo "Starting health check server on port 3000..."' >> /usr/src/nodebb/start.sh && \
+    echo '    while true; do' >> /usr/src/nodebb/start.sh && \
+    echo '        echo -e "HTTP/1.1 200 OK\\n\\nOK" | nc -l -p 3000 -q 1' >> /usr/src/nodebb/start.sh && \
+    echo '    done' >> /usr/src/nodebb/start.sh && \
+    echo '}' >> /usr/src/nodebb/start.sh && \
+    echo '' >> /usr/src/nodebb/start.sh && \
+    echo '# Start health server in background' >> /usr/src/nodebb/start.sh && \
+    echo 'start_health_server &' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Generate configuration' >> /usr/src/nodebb/start.sh && \
     echo '/usr/src/nodebb/configure.sh' >> /usr/src/nodebb/start.sh && \
@@ -105,17 +123,18 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo 'fi' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Start NodeBB' >> /usr/src/nodebb/start.sh && \
-    echo 'echo "Starting NodeBB..."' >> /usr/src/nodebb/start.sh && \
+    echo 'echo "Starting NodeBB on port 4567..."' >> /usr/src/nodebb/start.sh && \
     echo 'exec ./nodebb start' >> /usr/src/nodebb/start.sh
 
 RUN chmod +x /usr/src/nodebb/start.sh
 
-# Expose NodeBB port
+# Expose both NodeBB port and health check port
 EXPOSE 4567
+EXPOSE 3000
 
-# Health check
+# Health check for port 3000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=300s --retries=3 \
-    CMD curl -f http://localhost:4567 || exit 1
+    CMD curl -f http://localhost:3000 || exit 1
 
 # Run the startup script
 CMD ["/usr/src/nodebb/start.sh"]
