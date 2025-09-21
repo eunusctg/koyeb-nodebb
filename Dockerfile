@@ -34,11 +34,9 @@ RUN echo "Installing NodeBB composer plugin..." && \
     npm install nodebb-widget-essentials && \
     npm install nodebb-rewards-essentials
 
-# Try to build using NodeBB's own build script with a timeout
+# Build NodeBB
 RUN echo "Building NodeBB assets..." && \
-    timeout 300s ./nodebb build --series || \
-    (echo "Build timed out or failed, trying alternative approach..." && \
-     echo "Skipping build step - will build at runtime")
+    ./nodebb build --series
 
 # Stage 2: Final
 FROM node:18-slim
@@ -48,8 +46,8 @@ WORKDIR /usr/src/nodebb
 # Copy NodeBB from builder
 COPY --from=builder /usr/src/nodebb .
 
-# Install curl for health checks and build essentials for runtime build
-RUN apt-get update && apt-get install -y curl python3 build-essential && rm -rf /var/lib/apt/lists/*
+# Install curl and netcat for health checks
+RUN apt-get update && apt-get install -y curl netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
 # Environment variables (set these in Koyeb or secrets)
 ENV NODE_ENV="production"
@@ -92,15 +90,15 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/configure.sh && \
 
 RUN chmod +x /usr/src/nodebb/configure.sh
 
-# Create startup script with health check server on port 3000
+# Create startup script with health check server on port 8080
 RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo 'set -e' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
-    echo '# Function to start health check server on port 3000' >> /usr/src/nodebb/start.sh && \
+    echo '# Function to start health check server on port 8080' >> /usr/src/nodebb/start.sh && \
     echo 'start_health_server() {' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "Starting health check server on port 3000..."' >> /usr/src/nodebb/start.sh && \
+    echo '    echo "Starting health check server on port 8080..."' >> /usr/src/nodebb/start.sh && \
     echo '    while true; do' >> /usr/src/nodebb/start.sh && \
-    echo '        echo -e "HTTP/1.1 200 OK\\n\\nOK" | nc -l -p 3000 -q 1' >> /usr/src/nodebb/start.sh && \
+    echo '        echo -e "HTTP/1.1 200 OK\\n\\nOK" | nc -l -p 8080 -q 1' >> /usr/src/nodebb/start.sh && \
     echo '    done' >> /usr/src/nodebb/start.sh && \
     echo '}' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
@@ -116,12 +114,6 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo '    npm install --omit=dev' >> /usr/src/nodebb/start.sh && \
     echo 'fi' >> /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
-    echo '# Build NodeBB if not built (this may take several minutes)' >> /usr/src/nodebb/start.sh && \
-    echo 'if [ ! -f /usr/src/nodebb/build/loader.js ]; then' >> /usr/src/nodebb/start.sh && \
-    echo '    echo "Building NodeBB at runtime... (This may take several minutes)"' >> /usr/src/nodebb/start.sh && \
-    echo '    ./nodebb build --series' >> /usr/src/nodebb/start.sh && \
-    echo 'fi' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Start NodeBB' >> /usr/src/nodebb/start.sh && \
     echo 'echo "Starting NodeBB on port 4567..."' >> /usr/src/nodebb/start.sh && \
     echo 'exec ./nodebb start' >> /usr/src/nodebb/start.sh
@@ -130,11 +122,11 @@ RUN chmod +x /usr/src/nodebb/start.sh
 
 # Expose both NodeBB port and health check port
 EXPOSE 4567
-EXPOSE 3000
+EXPOSE 8080
 
-# Health check for port 3000
-HEALTHCHECK --interval=30s --timeout=30s --start-period=300s --retries=3 \
-    CMD curl -f http://localhost:3000 || exit 1
+# Health check for port 8080
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080 || exit 1
 
 # Run the startup script
 CMD ["/usr/src/nodebb/start.sh"]
