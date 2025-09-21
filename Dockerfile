@@ -34,9 +34,9 @@ RUN echo "Installing NodeBB composer plugin..." && \
     npm install nodebb-widget-essentials && \
     npm install nodebb-rewards-essentials
 
-# Build NodeBB using npm script instead of ./nodebb command
+# Build NodeBB using the correct command for v2.7.0
 RUN echo "Building NodeBB assets..." && \
-    npm run build
+    ./nodebb build
 
 # Stage 2: Final
 FROM node:18-slim
@@ -104,16 +104,13 @@ RUN echo '#!/bin/bash' > /usr/src/nodebb/start.sh && \
     echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Start health server in background' >> /usr/src/nodebb/start.sh && \
     echo 'start_health_server &' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Generate configuration' >> /usr/src/nodebb/start.sh && \
     echo '/usr/src/nodebb/configure.sh' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Install production dependencies only' >> /usr/src/nodebb/start.sh && \
     echo 'if [ ! -d /usr/src/nodebb/node_modules ]; then' >> /usr/src/nodebb/start.sh && \
     echo '    echo "Installing NodeBB production dependencies..."' >> /usr/src/nodebb/start.sh && \
     echo '    npm install --omit=dev' >> /usr/src/nodebb/start.sh && \
     echo 'fi' >> /usr/src/nodebb/start.sh && \
-    echo '' >> /usr/src/nodebb/start.sh && \
     echo '# Start NodeBB' >> /usr/src/nodebb/start.sh && \
     echo 'echo "Starting NodeBB on port 4567..."' >> /usr/src/nodebb/start.sh && \
     echo 'exec ./nodebb start' >> /usr/src/nodebb/start.sh
